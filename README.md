@@ -1,12 +1,6 @@
 # screenpng (simple http server with save screenshot in png)
 
-## This application is a simple example of using a [pog7x/ssfactory](https://github.com/pog7x/ssfactory)
-
-<br/>
-
-### Develop with [spf13/cobra](https://github.com/spf13/cobra) and [pf13/viper](https://github.com/spf13/viper)
-
-<br/>
+## This application ([spf13/cobra](https://github.com/spf13/cobra) + [pf13/viper](https://github.com/spf13/viper)) is a simple example of using a [pog7x/ssfactory](https://github.com/pog7x/ssfactory)
 
 ### Example of build/run app in docker container ([base docker image](https://hub.docker.com/repository/docker/pog7x/gobasebrowser))
 
