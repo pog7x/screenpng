@@ -8,5 +8,4 @@
 docker build -t screen_png .
 
 docker run -v $(pwd):/screenpng -p 8099:8099 -it screen_png
-
 ```

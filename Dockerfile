@@ -9,4 +9,4 @@ ENV DISPLAY:=99
 
 EXPOSE 8099
 
-CMD ["go", "run", "main.go", "serve"]
+CMD ["go", "run", "main.go", "serve", "-c=./configs/.screenpng-config.dev.yml"]

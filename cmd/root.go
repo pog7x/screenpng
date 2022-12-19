@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/pog7x/screenpng/configs"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -24,28 +24,37 @@ func Execute() {
 }
 
 func init() {
+	cobra.OnInitialize(initConfig)
+
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "path to config file")
+
 	rootCmd.AddCommand(serveCmd)
-
-	rootCmd.PersistentFlags().StringVar(
-		&cfgFile,
-		"config",
-		"./configs/.screenpng-config.dev.yml",
-		"path to config file",
-	)
-
-	initConfig()
 }
 
 func initConfig() {
-	viper.SetConfigFile(cfgFile)
+	v := viper.New()
+	if cfgFile != "" {
+		v.SetConfigFile(cfgFile)
 
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		panic(fmt.Errorf("reading config %s error: %w", viper.ConfigFileUsed(), err))
+		if err := v.ReadInConfig(); err != nil {
+			panic(fmt.Errorf("reading config %s error: %w", v.ConfigFileUsed(), err))
+		}
 	}
 
-	if err := viper.Unmarshal(configs.Configuration); err != nil {
-		panic(fmt.Errorf("decoding config %s error: %w", viper.ConfigFileUsed(), err))
+	v.AutomaticEnv()
+
+	envKeysMap := map[string]interface{}{}
+	if err := mapstructure.Decode(*configs.Configuration, &envKeysMap); err != nil {
+		panic(fmt.Errorf("decoding config to mapstructure error: %w", err))
+	}
+
+	for k := range envKeysMap {
+		if bindErr := v.BindEnv(k); bindErr != nil {
+			panic(fmt.Errorf("binding viper env variable '%s' error: %w", k, bindErr))
+		}
+	}
+
+	if err := v.Unmarshal(configs.Configuration); err != nil {
+		panic(fmt.Errorf("decoding env configuration error: %w", err))
 	}
 }
