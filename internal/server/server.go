@@ -3,13 +3,15 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"image"
 	"image/png"
+	"io/ioutil"
 	"net/http"
 	"os"
 
+	"github.com/gorilla/mux"
 	"github.com/pog7x/screenpng/configs"
-
 	"github.com/pog7x/ssfactory"
 
 	"net/http/pprof"
@@ -36,63 +38,78 @@ func NewHTTPServer(logger *zap.Logger, cfg *configs.Config, f ssfactory.Factory)
 }
 
 func (s HTTPServer) Start() error {
-	s.registerHandlers()
+	s.server.Handler = s.registerRouter()
 	s.logger.Sugar().Infof("Server is running on %s", s.server.Addr)
 	return s.server.ListenAndServe()
 }
 
-func (s HTTPServer) registerHandlers() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
-	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
-	mux.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
-	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+func (s HTTPServer) registerRouter() *mux.Router {
+	r := mux.NewRouter()
+	r.Use(s.loggingMiddleware)
 
-	mux.Handle("/screenshot", http.HandlerFunc(s.screenshot()))
-	s.server.Handler = mux
+	r.HandleFunc("/debug/pprof/", pprof.Index)
+	r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	r.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	r.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	r.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	r.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	r.Handle("/debug/pprof/block", pprof.Handler("block"))
+	r.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	r.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
+	r.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	r.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+
+	r.HandleFunc("/screenshot", screenshot(s.logger, s.f)).Methods("POST")
+
+	return r
 }
 
 func (s HTTPServer) Stop(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
-func (s HTTPServer) screenshot() func(w http.ResponseWriter, r *http.Request) {
+func screenshot(logger *zap.Logger, factory ssfactory.Factory) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		url := r.URL.Query().Get("url")
-		name := r.URL.Query().Get("name")
+		type screenshotReq struct {
+			URL  string `json:"url"`
+			Name string `json:"name"`
+		}
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+		}
+
+		var screenshotReqBody screenshotReq
+		err = json.Unmarshal(body, &screenshotReqBody)
+		if err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+		}
 
 		handler := func(screenshotBytes []byte) error {
 			screenshot, _, err := image.Decode(bytes.NewReader(screenshotBytes))
 			if err != nil {
-				s.logger.Error("Decoding screenshot bytes error", zap.Error(err))
+				logger.Error("Decoding screenshot bytes error", zap.Error(err))
 				return err
 			}
 
-			out, err := os.Create(name)
+			out, err := os.Create(screenshotReqBody.Name)
 			if err != nil {
-				s.logger.Sugar().Errorf("Creating screenshot file %s error %v", "sd", err)
+				logger.Sugar().Errorf("Creating screenshot file %s error %v", "sd", err)
 				return err
 			}
 
 			err = png.Encode(out, screenshot)
 			if err != nil {
-				s.logger.Error("Encoding screenshot bytes error", zap.Error(err))
+				logger.Error("Encoding screenshot bytes error", zap.Error(err))
 				return err
 			}
 			return nil
 		}
 
 		var maximize string
-		go s.f.MakeScreenshot(
+		go factory.MakeScreenshot(
 			ssfactory.MakeScreenshotPayload{
-				URL:            url,
+				URL:            screenshotReqBody.URL,
 				DOMElementBy:   ssfactory.ByTagName,
 				DOMElementName: "body",
 				Scroll:         true,
@@ -100,6 +117,13 @@ func (s HTTPServer) screenshot() func(w http.ResponseWriter, r *http.Request) {
 				MaximizeWindow: &maximize,
 			},
 		)
-		w.Write([]byte{})
+		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func (s HTTPServer) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Info("New request", zap.String("request_uri", r.RequestURI), zap.String("method", r.Method))
+		next.ServeHTTP(w, r)
+	})
 }
