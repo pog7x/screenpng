@@ -3,6 +3,7 @@ module github.com/pog7x/screenpng
 go 1.19
 
 require (
+	github.com/gorilla/mux v1.8.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pog7x/ssfactory v0.0.0-20221116183740-42dbe8bcde9e
 	github.com/spf13/cobra v1.6.1
