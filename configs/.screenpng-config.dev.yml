@@ -1,23 +1,23 @@
 debug: true
-use_browser: chrome
+use_browser: firefox
 webdriver_port: 8089
 
-firefox_binary_path: /usr/bin/firefox
+firefox_binary_path: /usr/bin/firefox-nightly
 geckodriver_path: /webdriver/geckodriver
 firefox_args:
-  - --headless
-  - --no-sandbox
-  - --disable-dev-shm-usage
-  - --width=1920
+    - --headless
+    - --no-sandbox
+    - --disable-dev-shm-usage
+    - --width=1920
 
 chrome_binary_path: /usr/bin/google-chrome
 chromedriver_path: /webdriver/chromedriver
 chrome_args:
-  - --headless
-  - --no-sandbox
-  - --disable-dev-shm-usage
-  - --disable-gpu
-  - --window-size=1920,1080
+    - --headless
+    - --no-sandbox
+    - --disable-dev-shm-usage
+    - --disable-gpu
+    - --window-size=1920,1080
 
 server_listen_addr: 0.0.0.0:8099
 server_read_timeout: 3s

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/png"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 
@@ -74,7 +74,7 @@ func screenshot(logger *zap.Logger, factory ssfactory.Factory) func(w http.Respo
 			URL  string `json:"url"`
 			Name string `json:"name"`
 		}
-		body, err := ioutil.ReadAll(r.Body)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
 		}
