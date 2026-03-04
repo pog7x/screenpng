@@ -70,10 +70,14 @@ func (s HTTPServer) Stop(ctx context.Context) error {
 
 func screenshot(logger *zap.Logger, factory ssfactory.Factory) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		type screenshotReq struct {
+		type urlItem struct {
 			URL  string `json:"url"`
 			Name string `json:"name"`
 		}
+		type screenshotReq struct {
+			Items []urlItem `json:"items"`
+		}
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Bad request", http.StatusBadRequest)
@@ -85,38 +89,45 @@ func screenshot(logger *zap.Logger, factory ssfactory.Factory) func(w http.Respo
 			http.Error(w, "Bad request", http.StatusBadRequest)
 		}
 
-		handler := func(screenshotBytes []byte) error {
-			screenshot, _, err := image.Decode(bytes.NewReader(screenshotBytes))
-			if err != nil {
-				logger.Error("Decoding screenshot bytes error", zap.Error(err))
-				return err
-			}
+		handler := func(name string) func([]byte) error {
+			return func(screenshotBytes []byte) error {
+				screenshot, _, err := image.Decode(bytes.NewReader(screenshotBytes))
+				if err != nil {
+					logger.Error("Decoding screenshot bytes error", zap.Error(err))
+					return err
+				}
 
-			out, err := os.Create(screenshotReqBody.Name)
-			if err != nil {
-				logger.Sugar().Errorf("Creating screenshot file %s error %v", "sd", err)
-				return err
-			}
+				out, err := os.Create(name)
+				if err != nil {
+					logger.Sugar().Errorf("Creating screenshot file %s error %v", "sd", err)
+					return err
+				}
 
-			err = png.Encode(out, screenshot)
-			if err != nil {
-				logger.Error("Encoding screenshot bytes error", zap.Error(err))
-				return err
+				err = png.Encode(out, screenshot)
+				if err != nil {
+					logger.Error("Encoding screenshot bytes error", zap.Error(err))
+					return err
+				}
+
+				return nil
 			}
-			return nil
 		}
 
-		var maximize string
-		go factory.MakeScreenshot(
-			ssfactory.MakeScreenshotPayload{
-				URL:            screenshotReqBody.URL,
-				DOMElementBy:   ssfactory.ByTagName,
-				DOMElementName: "body",
-				Scroll:         true,
-				BytesHandler:   handler,
-				MaximizeWindow: &maximize,
-			},
-		)
+		for _, i := range screenshotReqBody.Items {
+			go func(item urlItem) {
+				var maximize string
+				factory.MakeScreenshot(
+					ssfactory.MakeScreenshotPayload{
+						URL:            item.URL,
+						DOMElementBy:   ssfactory.ByTagName,
+						DOMElementName: "body",
+						Scroll:         true,
+						BytesHandler:   handler(item.Name),
+						MaximizeWindow: &maximize,
+					},
+				)
+			}(i)
+		}
 		w.WriteHeader(http.StatusOK)
 	}
 }
